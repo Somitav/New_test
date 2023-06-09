@@ -1,0 +1,27 @@
+{
+	"$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"value": "PROD2sources"
+		},
+		"Snowflake_dev_properties_typeProperties_connectionString_secretName": {
+			"value": "ProdSecret"
+		},
+		"key_dev_properties_typeProperties_baseUrl": {
+			"value": "https://KeyDev2sources.vault.azure.net"
+		},
+		"link_source_1_sasUri": {
+			"value": ""
+		},
+		"link_source_2_sasUri": {
+			"value": ""
+		},
+		"containerUri": {
+			"value": ""
+		},
+		"containerSasToken": {
+			"value": ""
+		}
+	}
+}

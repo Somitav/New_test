@@ -1,0 +1,658 @@
+{
+	"$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+	"contentVersion": "1.0.0.0",
+	"parameters": {
+		"factoryName": {
+			"type": "string",
+			"metadata": "Data Factory name",
+			"defaultValue": "PROD2sources"
+		},
+		"Snowflake_dev_properties_typeProperties_connectionString_secretName": {
+			"type": "string",
+			"defaultValue": "ProdSecret"
+		},
+		"key_dev_properties_typeProperties_baseUrl": {
+			"type": "string",
+			"defaultValue": "https://KeyDev2sources.vault.azure.net"
+		},
+		"link_source_1_sasUri": {
+			"type": "secureString",
+			"metadata": "Secure string for 'sasUri' of 'link_source_1'"
+		},
+		"link_source_2_sasUri": {
+			"type": "secureString",
+			"metadata": "Secure string for 'sasUri' of 'link_source_2'"
+		}
+	},
+	"variables": {
+		"factoryId": "[concat('Microsoft.DataFactory/factories/', parameters('factoryName'))]"
+	},
+	"resources": [
+		{
+			"name": "[concat(parameters('factoryName'), '/DEV_copy_Accre')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy Accreditation_raw",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "SnowflakeSink",
+								"preCopyScript": {
+									"value": "truncate table \"DEV_DB\".\"ACCREDITATION_SC\".\"ACCREDITATION\" ;",
+									"type": "Expression"
+								},
+								"importSettings": {
+									"type": "SnowflakeImportCopyCommand"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "accreditation_source",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "sink_sf_accre",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					},
+					{
+						"name": "Script1",
+						"type": "Script",
+						"dependsOn": [
+							{
+								"activity": "Copy Accreditation_raw",
+								"dependencyConditions": [
+									"Completed"
+								]
+							}
+						],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "Snowflake_dev",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "USE SCHEMA \"ACCREDITATION_SC_PROD\";\n\n\ncreate or replace view prin_std_id as (select *,\n\n    CASE\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 1)\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 2)\n\n    END AS prin_id,CASE\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 4)\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 3)\n\n    END AS std_id from ACCREDITATION_SC_PROD.ACCREDITATION_FINAL  where StandardCheckID like '%.%.%');\n\n\n \n\n \n \n\n \n\nCREATE or replace  VIEW std_name AS\n\n    (SELECT DISTINCT\n\n        (StandardCheckID),\n\n        CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END AS abc\n\n    FROM\n\n        ACCREDITATION_SC_PROD.ACCREDITATION_FINAL \n\n    WHERE\n\n        (CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END) IS NOT NULL);\n\n       \n\n\n \n\n \n\n \n\nCREATE or replace  view prin_name AS (SELECT DISTINCT (StandardCheckID),\n\n    CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END AS principle FROM\n\n    ACCREDITATION_SC_PROD.ACCREDITATION_FINAL\n\nWHERE\n\n    (CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END) IS NOT NULL);\n\n   \n\n\n \n\n \n\nCREATE or replace VIEW prin_std_name AS\n\n    (SELECT\n\n        a.*, b.principle AS principle, c.abc AS standard\n\n    FROM\n\n        prin_std_id AS a\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.prin_name AS b ON a.prin_id = b.StandardCheckID\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.std_name AS c ON a.std_id = c.StandardCheckID);\n\n       \n\n\n \n\n \n\ncreate or replace  table  final as(select *,count(*) over (partition by countryname,principle,standard) as no_of_checks,sum(case when Answer='Yes' and reviewed='Yes' then 1 else 0 end) over (partition by countryname,principle,standard) as checks_completed from prin_std_name order by countryname,StandardCheckID);\n\n\n\n\n \n\n \n\ndrop view prin_std_id;\n\ndrop view std_name;\n\ndrop view prin_name;\n\ndrop view prin_std_name;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-06-08T09:48:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/accreditation_source')]",
+				"[concat(variables('factoryId'), '/datasets/sink_sf_accre')]",
+				"[concat(variables('factoryId'), '/linkedServices/Snowflake_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/DEV_copy_Coffee')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy Coffee_data",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "SnowflakeSink",
+								"preCopyScript": {
+									"value": "CREATE TABLE IF NOT EXISTS \"PROD_DB\".\"COFFEE_SC_PROD\".\"COFFEE_TABLE_FINAL\"(\"PRODUCTS\" STRING,\"TYPE\" STRING);",
+									"type": "Expression"
+								},
+								"importSettings": {
+									"type": "SnowflakeImportCopyCommand"
+								}
+							},
+							"enableStaging": false
+						},
+						"inputs": [
+							{
+								"referenceName": "coffee_source",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "sink_sf_coffee",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-06-08T09:48:07Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/coffee_source')]",
+				"[concat(variables('factoryId'), '/datasets/sink_sf_coffee')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/script_test')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Script1",
+						"type": "Script",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"linkedServiceName": {
+							"referenceName": "Snowflake_dev",
+							"type": "LinkedServiceReference"
+						},
+						"typeProperties": {
+							"scripts": [
+								{
+									"type": "Query",
+									"text": {
+										"value": "USE SCHEMA \"ACCREDITATION_SC_PROD\";\n\n\ncreate or replace view prin_std_id as (select *,\n\n    CASE\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 1)\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 2)\n\n    END AS prin_id,CASE\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 4)\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 3)\n\n    END AS std_id from ACCREDITATION_SC_PROD.ACCREDITATION_FINAL  where StandardCheckID like '%.%.%');\n\n\n \n\n \n \n\n \n\nCREATE or replace  VIEW std_name AS\n\n    (SELECT DISTINCT\n\n        (StandardCheckID),\n\n        CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END AS abc\n\n    FROM\n\n        ACCREDITATION_SC_PROD.ACCREDITATION_FINAL \n\n    WHERE\n\n        (CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END) IS NOT NULL);\n\n       \n\n\n \n\n \n\n \n\nCREATE or replace  view prin_name AS (SELECT DISTINCT (StandardCheckID),\n\n    CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END AS principle FROM\n\n    ACCREDITATION_SC_PROD.ACCREDITATION_FINAL\n\nWHERE\n\n    (CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END) IS NOT NULL);\n\n   \n\n\n \n\n \n\nCREATE or replace VIEW prin_std_name AS\n\n    (SELECT\n\n        a.*, b.principle AS principle, c.abc AS standard\n\n    FROM\n\n        prin_std_id AS a\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.prin_name AS b ON a.prin_id = b.StandardCheckID\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.std_name AS c ON a.std_id = c.StandardCheckID);\n\n       \n\n\n \n\n \n\ncreate or replace  table  final as(select *,count(*) over (partition by countryname,principle,standard) as no_of_checks,sum(case when Answer='Yes' and reviewed='Yes' then 1 else 0 end) over (partition by countryname,principle,standard) as checks_completed from prin_std_name order by countryname,StandardCheckID);\n\n\n\n\n \n\n \n\ndrop view prin_std_id;\n\ndrop view std_name;\n\ndrop view prin_name;\n\ndrop view prin_std_name;",
+										"type": "Expression"
+									}
+								}
+							],
+							"scriptBlockExecutionTimeout": "02:00:00"
+						}
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": [],
+				"lastPublishTime": "2023-06-08T09:48:06Z"
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/Snowflake_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/testting')]",
+			"type": "Microsoft.DataFactory/factories/pipelines",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"activities": [
+					{
+						"name": "Copy data1",
+						"type": "Copy",
+						"dependsOn": [],
+						"policy": {
+							"timeout": "0.12:00:00",
+							"retry": 0,
+							"retryIntervalInSeconds": 30,
+							"secureOutput": false,
+							"secureInput": false
+						},
+						"userProperties": [],
+						"typeProperties": {
+							"source": {
+								"type": "DelimitedTextSource",
+								"storeSettings": {
+									"type": "AzureBlobStorageReadSettings",
+									"recursive": true,
+									"enablePartitionDiscovery": false
+								},
+								"formatSettings": {
+									"type": "DelimitedTextReadSettings"
+								}
+							},
+							"sink": {
+								"type": "DelimitedTextSink",
+								"storeSettings": {
+									"type": "AzureBlobStorageWriteSettings"
+								},
+								"formatSettings": {
+									"type": "DelimitedTextWriteSettings",
+									"quoteAllText": true,
+									"fileExtension": ".txt"
+								}
+							},
+							"enableStaging": false,
+							"translator": {
+								"type": "TabularTranslator",
+								"typeConversion": true,
+								"typeConversionSettings": {
+									"allowDataTruncation": true,
+									"treatBooleanAsNumber": false
+								}
+							}
+						},
+						"inputs": [
+							{
+								"referenceName": "source_accre1",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						],
+						"outputs": [
+							{
+								"referenceName": "accree_output",
+								"type": "DatasetReference",
+								"parameters": {}
+							}
+						]
+					}
+				],
+				"policy": {
+					"elapsedTimeMetric": {},
+					"cancelAfter": {}
+				},
+				"annotations": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/datasets/source_accre1')]",
+				"[concat(variables('factoryId'), '/datasets/accree_output')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/accreditation_source')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "link_source_1",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "raw_accreditation.csv",
+						"container": "source"
+					},
+					"columnDelimiter": ",",
+					"rowDelimiter": "\r\n",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "StandardSetName",
+						"type": "String"
+					},
+					{
+						"name": "Region",
+						"type": "String"
+					},
+					{
+						"name": "CountryName",
+						"type": "String"
+					},
+					{
+						"name": "VisitStartDate",
+						"type": "String"
+					},
+					{
+						"name": "VisitEndDate",
+						"type": "String"
+					},
+					{
+						"name": "StandardCheckID",
+						"type": "String"
+					},
+					{
+						"name": "Name",
+						"type": "String"
+					},
+					{
+						"name": "StageName",
+						"type": "String"
+					},
+					{
+						"name": "Answer",
+						"type": "String"
+					},
+					{
+						"name": "Reviewed",
+						"type": "String"
+					},
+					{
+						"name": "MoreInformationRequired",
+						"type": "String"
+					},
+					{
+						"name": "Accredited",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/link_source_1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/accree_output')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "link_source_2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"container": "blob-output"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": []
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/link_source_2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/coffee_source')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "link_source_2",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "Coffee chain dataset.csv",
+						"container": "source"
+					},
+					"columnDelimiter": ",",
+					"rowDelimiter": "\r\n",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "Products",
+						"type": "String"
+					},
+					{
+						"name": "Type",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/link_source_2')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/sink_sf_accre')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "Snowflake_dev",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": "ACCREDITATION_SC_PROD",
+					"table": "ACCREDITATION_FINAL"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/Snowflake_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/sink_sf_coffee')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "Snowflake_dev",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "SnowflakeTable",
+				"schema": [],
+				"typeProperties": {
+					"schema": "COFFEE_SC_PROD",
+					"table": "COFFEE_TABLE_FINAL"
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/Snowflake_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/source_accre1')]",
+			"type": "Microsoft.DataFactory/factories/datasets",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"linkedServiceName": {
+					"referenceName": "link_source_1",
+					"type": "LinkedServiceReference"
+				},
+				"annotations": [],
+				"type": "DelimitedText",
+				"typeProperties": {
+					"location": {
+						"type": "AzureBlobStorageLocation",
+						"fileName": "raw_accreditation.csv",
+						"container": "blob-blob"
+					},
+					"columnDelimiter": ",",
+					"escapeChar": "\\",
+					"firstRowAsHeader": true,
+					"quoteChar": "\""
+				},
+				"schema": [
+					{
+						"name": "StandardSetName",
+						"type": "String"
+					},
+					{
+						"name": "Region",
+						"type": "String"
+					},
+					{
+						"name": "CountryName",
+						"type": "String"
+					},
+					{
+						"name": "VisitStartDate",
+						"type": "String"
+					},
+					{
+						"name": "VisitEndDate",
+						"type": "String"
+					},
+					{
+						"name": "StandardCheckID",
+						"type": "String"
+					},
+					{
+						"name": "Name",
+						"type": "String"
+					},
+					{
+						"name": "StageName",
+						"type": "String"
+					},
+					{
+						"name": "Answer",
+						"type": "String"
+					},
+					{
+						"name": "Reviewed",
+						"type": "String"
+					},
+					{
+						"name": "MoreInformationRequired",
+						"type": "String"
+					},
+					{
+						"name": "Accredited",
+						"type": "String"
+					}
+				]
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/link_source_1')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/Snowflake_dev')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "Snowflake",
+				"typeProperties": {
+					"authenticationType": "Basic",
+					"connectionString": {
+						"type": "AzureKeyVaultSecret",
+						"store": {
+							"referenceName": "key_dev",
+							"type": "LinkedServiceReference"
+						},
+						"secretName": "[parameters('Snowflake_dev_properties_typeProperties_connectionString_secretName')]"
+					}
+				}
+			},
+			"dependsOn": [
+				"[concat(variables('factoryId'), '/linkedServices/key_dev')]"
+			]
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/key_dev')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureKeyVault",
+				"typeProperties": {
+					"baseUrl": "[parameters('key_dev_properties_typeProperties_baseUrl')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/link_source_1')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"sasUri": "[parameters('link_source_1_sasUri')]"
+				}
+			},
+			"dependsOn": []
+		},
+		{
+			"name": "[concat(parameters('factoryName'), '/link_source_2')]",
+			"type": "Microsoft.DataFactory/factories/linkedServices",
+			"apiVersion": "2018-06-01",
+			"properties": {
+				"annotations": [],
+				"type": "AzureBlobStorage",
+				"typeProperties": {
+					"sasUri": "[parameters('link_source_2_sasUri')]"
+				}
+			},
+			"dependsOn": []
+		}
+	]
+}
