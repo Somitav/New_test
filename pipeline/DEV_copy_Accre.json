@@ -1,0 +1,95 @@
+{
+	"name": "DEV_copy_Accre",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy Accreditation_raw",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "SnowflakeSink",
+						"preCopyScript": {
+							"value": "truncate table \"DEV_DB\".\"ACCREDITATION_SC\".\"ACCREDITATION\" ;",
+							"type": "Expression"
+						},
+						"importSettings": {
+							"type": "SnowflakeImportCopyCommand"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "accreditation_source",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "sink_sf_accre",
+						"type": "DatasetReference"
+					}
+				]
+			},
+			{
+				"name": "Script1",
+				"type": "Script",
+				"dependsOn": [
+					{
+						"activity": "Copy Accreditation_raw",
+						"dependencyConditions": [
+							"Completed"
+						]
+					}
+				],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"linkedServiceName": {
+					"referenceName": "Snowflake_dev",
+					"type": "LinkedServiceReference"
+				},
+				"typeProperties": {
+					"scripts": [
+						{
+							"type": "Query",
+							"text": {
+								"value": "USE SCHEMA \"ACCREDITATION_SC_PROD\";\n\n\ncreate or replace view prin_std_id as (select *,\n\n    CASE\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 1)\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 2)\n\n    END AS prin_id,CASE\n\n        WHEN LEFT(StandardCheckID, 2) = 10 THEN LEFT(StandardCheckID, 4)\n\n        WHEN LEFT(StandardCheckID, 2) != 10 THEN LEFT(StandardCheckID, 3)\n\n    END AS std_id from ACCREDITATION_SC_PROD.ACCREDITATION_FINAL  where StandardCheckID like '%.%.%');\n\n\n \n\n \n \n\n \n\nCREATE or replace  VIEW std_name AS\n\n    (SELECT DISTINCT\n\n        (StandardCheckID),\n\n        CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END AS abc\n\n    FROM\n\n        ACCREDITATION_SC_PROD.ACCREDITATION_FINAL \n\n    WHERE\n\n        (CASE\n\n            WHEN LENGTH(StandardCheckID) IN (3 , 4) THEN name\n\n        END) IS NOT NULL);\n\n       \n\n\n \n\n \n\n \n\nCREATE or replace  view prin_name AS (SELECT DISTINCT (StandardCheckID),\n\n    CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END AS principle FROM\n\n    ACCREDITATION_SC_PROD.ACCREDITATION_FINAL\n\nWHERE\n\n    (CASE\n\n        WHEN LENGTH(StandardCheckID) IN (1 , 2) THEN name\n\n    END) IS NOT NULL);\n\n   \n\n\n \n\n \n\nCREATE or replace VIEW prin_std_name AS\n\n    (SELECT\n\n        a.*, b.principle AS principle, c.abc AS standard\n\n    FROM\n\n        prin_std_id AS a\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.prin_name AS b ON a.prin_id = b.StandardCheckID\n\n            LEFT JOIN\n\n        ACCREDITATION_SC_PROD.std_name AS c ON a.std_id = c.StandardCheckID);\n\n       \n\n\n \n\n \n\ncreate or replace  table  final as(select *,count(*) over (partition by countryname,principle,standard) as no_of_checks,sum(case when Answer='Yes' and reviewed='Yes' then 1 else 0 end) over (partition by countryname,principle,standard) as checks_completed from prin_std_name order by countryname,StandardCheckID);\n\n\n\n\n \n\n \n\ndrop view prin_std_id;\n\ndrop view std_name;\n\ndrop view prin_name;\n\ndrop view prin_std_name;",
+								"type": "Expression"
+							}
+						}
+					],
+					"scriptBlockExecutionTimeout": "02:00:00"
+				}
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2023-06-08T09:48:07Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

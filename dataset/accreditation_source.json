@@ -1,0 +1,74 @@
+{
+	"name": "accreditation_source",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "link_source_1",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "DelimitedText",
+		"typeProperties": {
+			"location": {
+				"type": "AzureBlobStorageLocation",
+				"fileName": "raw_accreditation.csv",
+				"container": "source"
+			},
+			"columnDelimiter": ",",
+			"rowDelimiter": "\r\n",
+			"escapeChar": "\\",
+			"firstRowAsHeader": true,
+			"quoteChar": "\""
+		},
+		"schema": [
+			{
+				"name": "StandardSetName",
+				"type": "String"
+			},
+			{
+				"name": "Region",
+				"type": "String"
+			},
+			{
+				"name": "CountryName",
+				"type": "String"
+			},
+			{
+				"name": "VisitStartDate",
+				"type": "String"
+			},
+			{
+				"name": "VisitEndDate",
+				"type": "String"
+			},
+			{
+				"name": "StandardCheckID",
+				"type": "String"
+			},
+			{
+				"name": "Name",
+				"type": "String"
+			},
+			{
+				"name": "StageName",
+				"type": "String"
+			},
+			{
+				"name": "Answer",
+				"type": "String"
+			},
+			{
+				"name": "Reviewed",
+				"type": "String"
+			},
+			{
+				"name": "MoreInformationRequired",
+				"type": "String"
+			},
+			{
+				"name": "Accredited",
+				"type": "String"
+			}
+		]
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

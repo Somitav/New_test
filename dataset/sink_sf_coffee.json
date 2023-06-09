@@ -1,0 +1,17 @@
+{
+	"name": "sink_sf_coffee",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Snowflake_dev",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SnowflakeTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "COFFEE_SC_PROD",
+			"table": "COFFEE_TABLE_FINAL"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

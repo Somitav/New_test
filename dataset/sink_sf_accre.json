@@ -1,0 +1,17 @@
+{
+	"name": "sink_sf_accre",
+	"properties": {
+		"linkedServiceName": {
+			"referenceName": "Snowflake_dev",
+			"type": "LinkedServiceReference"
+		},
+		"annotations": [],
+		"type": "SnowflakeTable",
+		"schema": [],
+		"typeProperties": {
+			"schema": "ACCREDITATION_SC_PROD",
+			"table": "ACCREDITATION_FINAL"
+		}
+	},
+	"type": "Microsoft.DataFactory/factories/datasets"
+}

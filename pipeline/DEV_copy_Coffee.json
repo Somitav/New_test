@@ -1,0 +1,59 @@
+{
+	"name": "DEV_copy_Coffee",
+	"properties": {
+		"activities": [
+			{
+				"name": "Copy Coffee_data",
+				"type": "Copy",
+				"dependsOn": [],
+				"policy": {
+					"timeout": "0.12:00:00",
+					"retry": 0,
+					"retryIntervalInSeconds": 30,
+					"secureOutput": false,
+					"secureInput": false
+				},
+				"userProperties": [],
+				"typeProperties": {
+					"source": {
+						"type": "DelimitedTextSource",
+						"storeSettings": {
+							"type": "AzureBlobStorageReadSettings",
+							"recursive": true,
+							"enablePartitionDiscovery": false
+						},
+						"formatSettings": {
+							"type": "DelimitedTextReadSettings"
+						}
+					},
+					"sink": {
+						"type": "SnowflakeSink",
+						"preCopyScript": {
+							"value": "CREATE TABLE IF NOT EXISTS \"PROD_DB\".\"COFFEE_SC_PROD\".\"COFFEE_TABLE_FINAL\"(\"PRODUCTS\" STRING,\"TYPE\" STRING);",
+							"type": "Expression"
+						},
+						"importSettings": {
+							"type": "SnowflakeImportCopyCommand"
+						}
+					},
+					"enableStaging": false
+				},
+				"inputs": [
+					{
+						"referenceName": "coffee_source",
+						"type": "DatasetReference"
+					}
+				],
+				"outputs": [
+					{
+						"referenceName": "sink_sf_coffee",
+						"type": "DatasetReference"
+					}
+				]
+			}
+		],
+		"annotations": [],
+		"lastPublishTime": "2023-06-08T09:48:07Z"
+	},
+	"type": "Microsoft.DataFactory/factories/pipelines"
+}

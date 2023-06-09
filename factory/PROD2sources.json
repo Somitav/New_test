@@ -1,0 +1,9 @@
+{
+	"name": "PROD2sources",
+	"location": "eastus",
+	"identity": {
+		"type": "SystemAssigned",
+		"principalId": "a6fca57c-ce64-4291-8b81-9dd60926ff20",
+		"tenantId": "8ed6c75c-1934-4a22-ae5c-64b145e244db"
+	}
+}
